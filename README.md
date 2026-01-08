@@ -9,6 +9,7 @@ local RunService = game:GetService("RunService")
 local UIS        = game:GetService("UserInputService")
 local Camera     = workspace.CurrentCamera
 local LP         = Players.LocalPlayer
+local SoundService = game:GetService("SoundService")
 
 --================ CONFIG =================
 local CONFIG = {
@@ -18,20 +19,30 @@ local CONFIG = {
     DIM_COLOR  = Color3.fromRGB(80, 60, 120),
     HEAD_COLOR = Color3.fromRGB(255, 0, 0),
 
-    -- TEXTO (ESCALA INVERSA)
     MIN_TEXT   = 13,
     MAX_TEXT   = 28,
-    SCALE_DIST = 1200 -- quanto maior, mais suave
+    SCALE_DIST = 1200
 }
 
 --================ STATE =================
 getgenv().ONESP_STATE = {
+    ENABLED = true, -- F4
     ESP=true,
     AIM=false,
     RAINBOW=false,
     UI=true,
     MIN=false
 }
+
+--================ SOUND =================
+local ToggleSound = Instance.new("Sound")
+ToggleSound.SoundId = "rbxassetid://6026984224" -- beep clean
+ToggleSound.Volume = 1
+ToggleSound.Parent = SoundService
+
+local function PlayToggle()
+    ToggleSound:Play()
+end
 
 --================ DRAWING =================
 local Drawings={}
@@ -62,7 +73,7 @@ for _,b in ipairs(Buttons) do
 end
 
 local function RefreshUI()
-    if not getgenv().ONESP_STATE.UI then
+    if not getgenv().ONESP_STATE.UI or not getgenv().ONESP_STATE.ENABLED then
         for _,d in ipairs(Drawings) do d.Visible=false end
         return
     end
@@ -99,6 +110,15 @@ end
 local mouseStart
 UIS.InputBegan:Connect(function(i,gp)
     if gp then return end
+
+    if i.KeyCode == Enum.KeyCode.F4 then
+        getgenv().ONESP_STATE.ENABLED = not getgenv().ONESP_STATE.ENABLED
+        getgenv().ONESP_STATE.UI = getgenv().ONESP_STATE.ENABLED
+        PlayToggle()
+        RefreshUI()
+        return
+    end
+
     if i.UserInputType==Enum.UserInputType.MouseButton1 then
         local p=UIS:GetMouseLocation()
         mouseStart=p
@@ -182,6 +202,8 @@ end
 
 --================ MAIN LOOP =================
 RunService.RenderStepped:Connect(function()
+    if not getgenv().ONESP_STATE.ENABLED then return end
+
     local col=Color()
     Bar.Color=col Title.Color=col FOV.Color=col
 
@@ -190,7 +212,12 @@ RunService.RenderStepped:Connect(function()
 
     if getgenv().ONESP_STATE.AIM and hold then
         local t=Closest()
-        if t then Camera.CFrame=Camera.CFrame:Lerp(CFrame.new(Camera.CFrame.Position,t.Position),0.30) end
+        if t then
+            Camera.CFrame=Camera.CFrame:Lerp(
+                CFrame.new(Camera.CFrame.Position,t.Position),
+                0.30
+            )
+        end
     end
 
     local myRoot=LP.Character and LP.Character:FindFirstChild("HumanoidRootPart")
@@ -207,8 +234,6 @@ RunService.RenderStepped:Connect(function()
             if not on then for _,d in pairs(e) do d.Visible=false end continue end
 
             local dist=(myRoot.Position-r.Position).Magnitude
-
-            -- TAMANHO INVERSO 🔥
             local size=math.clamp(
                 CONFIG.MIN_TEXT + (dist/CONFIG.SCALE_DIST)*(CONFIG.MAX_TEXT-CONFIG.MIN_TEXT),
                 CONFIG.MIN_TEXT, CONFIG.MAX_TEXT
