@@ -190,7 +190,7 @@ RunService.RenderStepped:Connect(function()
 
     if getgenv().ONESP_STATE.AIM and hold then
         local t=Closest()
-        if t then Camera.CFrame=Camera.CFrame:Lerp(CFrame.new(Camera.CFrame.Position,t.Position),0.18) end
+        if t then Camera.CFrame=Camera.CFrame:Lerp(CFrame.new(Camera.CFrame.Position,t.Position),0.30) end
     end
 
     local myRoot=LP.Character and LP.Character:FindFirstChild("HumanoidRootPart")
