@@ -31,6 +31,7 @@ getgenv().ONESP_STATE = {
     RAINBOW=false,
     UI=true,
     MIN=false
+    WALLCHECK=true
 }
 
 --================ DRAWING =================
@@ -54,6 +55,7 @@ local Buttons={
     {name="ESP",key="ESP"},
     {name="AIMBOT",key="AIM"},
     {name="RAINBOW",key="RAINBOW"}
+    {name="WALLCHECK", key="WALLCHECK"}
 }
 
 local Btn={}
