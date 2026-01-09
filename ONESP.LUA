@@ -1,5 +1,5 @@
 --==================================================
---                ONESP FINAL FIXED
+--                ONESP
 --==================================================
 if getgenv().ONESP_LOADED then return end
 getgenv().ONESP_LOADED = true
@@ -15,10 +15,10 @@ local LP = Players.LocalPlayer
 --================ CONFIG =================
 local CONFIG = {
     COLORS = {
-        MAIN = Color3.fromRGB(170,110,255),
-        DARK = Color3.fromRGB(70,65,95),
-        BG   = Color3.fromRGB(18,16,30),
-        TEXT = Color3.fromRGB(235,235,235),
+        MAIN = Color3.fromRGB(255,255,255), -- neon branco
+        DARK = Color3.fromRGB(55,55,55),
+        BG   = Color3.fromRGB(10,10,10),
+        TEXT = Color3.fromRGB(255,255,255),
         HEAD = Color3.fromRGB(255,70,70)
     },
 
@@ -52,7 +52,6 @@ local STATE = {
     AIM_BONE=1,
     FOV=130
 }
-getgenv().ONESP_STATE = STATE
 
 --================ SOUND =================
 local snd = Instance.new("Sound")
@@ -61,29 +60,20 @@ snd.Volume=1
 snd.Parent=SoundService
 local function Beep() snd:Play() end
 
---================ DRAWING SYSTEM (FIXED) =================
-local UIDrawings = {}
-local ESPDrawings = {}
+--================ DRAW SYSTEM =================
+local UIDrawings, ESPDrawings = {}, {}
 
-local function D(t,p,isESP)
+local function D(t,p,esp)
     local o = Drawing.new(t)
-    if p then
-        for k,v in pairs(p) do
-            o[k] = v
-        end
-    end
-    if isESP then
-        table.insert(ESPDrawings,o)
-    else
-        table.insert(UIDrawings,o)
-    end
+    for k,v in pairs(p or {}) do o[k]=v end
+    table.insert(esp and ESPDrawings or UIDrawings,o)
     return o
 end
 
 --================ UI =================
 local UI={Pos=Vector2.new(90,220),Size=Vector2.new(240,340),MinSize=Vector2.new(240,32),Drag=false,Offset=Vector2.zero}
 
-local Frame=D("Square",{Filled=true,Transparency=0.9,Color=CONFIG.COLORS.BG})
+local Frame=D("Square",{Filled=true,Transparency=0.88,Color=CONFIG.COLORS.BG})
 local Bar=D("Square",{Filled=true})
 local Title=D("Text",{Text="ONESP",Size=18,Center=true,Outline=true})
 local Arrow=D("Text",{Text="▼",Size=18,Center=true,Outline=true})
@@ -98,7 +88,7 @@ local Buttons={
 
 local Btn={}
 for _,b in ipairs(Buttons) do
-    Btn[b.key]={Bg=D("Square",{Filled=true,Transparency=0.9}),Txt=D("Text",{Size=14,Center=true,Outline=true})}
+    Btn[b.key]={Bg=D("Square",{Filled=true,Transparency=0.85}),Txt=D("Text",{Size=14,Center=true,Outline=true})}
 end
 
 local SliderBG=D("Square",{Filled=true,Transparency=0.7})
@@ -114,10 +104,17 @@ local function RefreshUI()
     local size=STATE.MIN and UI.MinSize or UI.Size
 
     Frame.Visible=true Frame.Position=UI.Pos Frame.Size=size
-    Bar.Visible=true Bar.Position=UI.Pos Bar.Size=Vector2.new(size.X,3) Bar.Color=CONFIG.COLORS.MAIN
-    Title.Visible=true Title.Position=UI.Pos+Vector2.new(size.X/2,6) Title.Color=CONFIG.COLORS.MAIN
-    Arrow.Visible=true Arrow.Text=STATE.MIN and "▶" or "▼"
+    Bar.Visible=true Bar.Position=UI.Pos Bar.Size=Vector2.new(size.X,3)
+    Bar.Color=CONFIG.COLORS.MAIN
+
+    Title.Visible=true
+    Title.Position=UI.Pos+Vector2.new(size.X/2,6)
+    Title.Color=CONFIG.COLORS.TEXT
+
+    Arrow.Visible=true
+    Arrow.Text=STATE.MIN and "▶" or "▼"
     Arrow.Position=UI.Pos+Vector2.new(size.X-14,6)
+    Arrow.Color=CONFIG.COLORS.TEXT
 
     if STATE.MIN then return end
 
@@ -129,19 +126,19 @@ local function RefreshUI()
         o.Bg.Size=Vector2.new(180,30)
 
         if b.key=="FORCE" then
-            o.Bg.Color=CONFIG.COLORS.MAIN
+            o.Bg.Color=CONFIG.COLORS.DARK
             o.Txt.Text="FORCE: "..CONFIG.AIM_STRENGTHS[STATE.AIM_POWER].name
         elseif b.key=="BONE" then
-            o.Bg.Color=CONFIG.COLORS.MAIN
+            o.Bg.Color=CONFIG.COLORS.DARK
             o.Txt.Text="BONE: "..CONFIG.BONES[STATE.AIM_BONE].name
         else
-            o.Bg.Color=STATE[b.key] and CONFIG.COLORS.MAIN or CONFIG.COLORS.DARK
+            o.Bg.Color=STATE[b.key] and Color3.fromRGB(255,255,255) or CONFIG.COLORS.DARK
+            o.Txt.Color=STATE[b.key] and Color3.fromRGB(0,0,0) or CONFIG.COLORS.TEXT
             o.Txt.Text=b.label.." "..(STATE[b.key] and "ON" or "OFF")
         end
 
         o.Txt.Visible=true
         o.Txt.Position=o.Bg.Position+Vector2.new(90,6)
-        o.Txt.Color=CONFIG.COLORS.TEXT
     end
 
     local sy=40+#Buttons*38+14
@@ -259,12 +256,11 @@ end
 
 RunService.RenderStepped:Connect(function()
     if not STATE.ENABLED then return end
-    local col=STATE.RAINBOW and Color3.fromHSV(tick()%5/5,1,1) or CONFIG.COLORS.MAIN
 
     FOV.Visible=STATE.AIM
     FOV.Position=UIS:GetMouseLocation()
     FOV.Radius=STATE.FOV
-    FOV.Color=col
+    FOV.Color=CONFIG.COLORS.MAIN
 
     if STATE.AIM and UIS:IsMouseButtonPressed(Enum.UserInputType.MouseButton2) then
         local t=GetTarget()
@@ -296,7 +292,7 @@ RunService.RenderStepped:Connect(function()
 
             e.Box.Size=Vector2.new(w,hgt)
             e.Box.Position=Vector2.new(rs.X-w/2,rs.Y-hgt/2)
-            e.Box.Color=col
+            e.Box.Color=CONFIG.COLORS.MAIN
 
             local hs=Camera:WorldToViewportPoint(h.Position)
             e.Head.Position=Vector2.new(hs.X-4,hs.Y-4)
@@ -305,7 +301,7 @@ RunService.RenderStepped:Connect(function()
             local dist=(myRoot.Position-r.Position).Magnitude
             e.Name.Text=p.Name.." ["..math.floor(dist).."m]"
             e.Name.Position=Vector2.new(rs.X,rs.Y-hgt/2-16)
-            e.Name.Color=col
+            e.Name.Color=CONFIG.COLORS.TEXT
 
             for _,d in pairs(e) do d.Visible=true end
         else
