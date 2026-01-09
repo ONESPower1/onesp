@@ -4,45 +4,57 @@
 if getgenv().ONESP_LOADED then return end
 getgenv().ONESP_LOADED = true
 
-local Players    = game:GetService("Players")
-local RunService = game:GetService("RunService")
-local UIS        = game:GetService("UserInputService")
-local Camera     = workspace.CurrentCamera
-local LP         = Players.LocalPlayer
-local SoundService = game:GetService("SoundService")
+--================ SERVICES =================
+local Players=game:GetService("Players")
+local RunService=game:GetService("RunService")
+local UIS=game:GetService("UserInputService")
+local Camera=workspace.CurrentCamera
+local SoundService=game:GetService("SoundService")
+local LP=Players.LocalPlayer
 
 --================ CONFIG =================
-local CONFIG = {
-    FOV_RADIUS = 130,
+local CONFIG={
+    FOV_MIN=40,
+    FOV_MAX=260,
 
-    BASE_COLOR = Color3.fromRGB(155, 89, 255),
-    DIM_COLOR  = Color3.fromRGB(80, 60, 120),
-    HEAD_COLOR = Color3.fromRGB(255, 0, 0),
+    BASE_COLOR=Color3.fromRGB(160,90,255),
+    DIM_COLOR=Color3.fromRGB(70,60,100),
 
-    MIN_TEXT   = 13,
-    MAX_TEXT   = 28,
-    SCALE_DIST = 1200
+    AIM_STRENGTHS={
+        {value=0.18,name="LEGIT"},
+        {value=0.40,name="SMOOTH"},
+        {value=0.85,name="SOLID"}
+    },
+
+    BONES={
+        {name="HEAD",parts={"Head"}},
+        {name="TORSO",parts={"UpperTorso","Torso","LowerTorso"}},
+        {name="ROOT",parts={"HumanoidRootPart"}}
+    }
 }
 
 --================ STATE =================
-getgenv().ONESP_STATE = {
-    ENABLED = true, -- F4
+getgenv().ONESP_STATE={
+    ENABLED=true,
+    UI=true,
+    MIN=false,
+
     ESP=true,
     AIM=false,
     RAINBOW=false,
-    UI=true,
-    MIN=false
+
+    AIM_POWER=3,
+    AIM_BONE=1,
+
+    FOV=130
 }
 
 --================ SOUND =================
-local ToggleSound = Instance.new("Sound")
-ToggleSound.SoundId = "rbxassetid://6026984224" -- beep clean
-ToggleSound.Volume = 1
-ToggleSound.Parent = SoundService
-
-local function PlayToggle()
-    ToggleSound:Play()
-end
+local snd=Instance.new("Sound")
+snd.SoundId="rbxassetid://6026984224"
+snd.Volume=1
+snd.Parent=SoundService
+local function Play() snd:Play() end
 
 --================ DRAWING =================
 local Drawings={}
@@ -54,79 +66,137 @@ local function D(t,p)
 end
 
 --================ UI =================
-local UI={Pos=Vector2.new(80,220),Size=Vector2.new(210,170),MinSize=Vector2.new(210,32),Drag=false,Offset=Vector2.zero}
+local UI={Pos=Vector2.new(80,200),Size=Vector2.new(220,330),MinSize=Vector2.new(220,32),Drag=false,Offset=Vector2.zero}
 
-local Frame=D("Square",{Filled=true,Transparency=0.88,Color=Color3.fromRGB(20,15,35)})
-local Bar  =D("Square",{Filled=true,Color=CONFIG.BASE_COLOR})
-local Title=D("Text",{Text="ONESP",Size=18,Center=true,Outline=true,Color=CONFIG.BASE_COLOR})
-local Arrow=D("Text",{Text="▼",Size=18,Center=true,Outline=true,Color=Color3.fromRGB(220,220,220)})
+local Frame=D("Square",{Filled=true,Transparency=0.88,Color=Color3.fromRGB(20,15,30)})
+local Bar=D("Square",{Filled=true})
+local Title=D("Text",{Text="ONESP",Size=18,Center=true,Outline=true})
+local Arrow=D("Text",{Text="▼",Size=18,Center=true,Outline=true})
+
+local SliderBG=D("Square",{Filled=true,Transparency=0.7})
+local SliderFill=D("Square",{Filled=true})
+local SliderText=D("Text",{Size=13,Center=true,Outline=true})
+
+local draggingSlider=false
 
 local Buttons={
-    {name="ESP",key="ESP"},
-    {name="AIMBOT",key="AIM"},
-    {name="RAINBOW",key="RAINBOW"}
+    {key="ESP",label="ESP"},
+    {key="AIM",label="AIMBOT"},
+    {key="RAINBOW",label="RAINBOW"},
+    {key="FORCE",label="FORCE"},
+    {key="BONE",label="BONE"}
 }
 
 local Btn={}
 for _,b in ipairs(Buttons) do
-    Btn[b.key]={Bg=D("Square",{Filled=true,Transparency=0.85}),Txt=D("Text",{Size=14,Center=true,Outline=true})}
+    Btn[b.key]={Bg=D("Square",{Filled=true,Transparency=0.9}),Txt=D("Text",{Size=14,Center=true,Outline=true})}
 end
 
+--================ UI DRAW =================
 local function RefreshUI()
-    if not getgenv().ONESP_STATE.UI or not getgenv().ONESP_STATE.ENABLED then
-        for _,d in ipairs(Drawings) do d.Visible=false end
-        return
-    end
+    local s=getgenv().ONESP_STATE
+    for _,d in ipairs(Drawings) do d.Visible=false end
+    if not s.UI or not s.ENABLED then return end
 
-    local min=getgenv().ONESP_STATE.MIN
-    local size=min and UI.MinSize or UI.Size
+    local size=s.MIN and UI.MinSize or UI.Size
 
     Frame.Visible=true Frame.Position=UI.Pos Frame.Size=size
-    Bar.Visible=true   Bar.Position=UI.Pos   Bar.Size=Vector2.new(size.X,3)
-    Title.Visible=true Title.Position=UI.Pos+Vector2.new(size.X/2,6)
-
-    Arrow.Visible=true
-    Arrow.Text=min and "▶" or "▼"
+    Bar.Visible=true Bar.Position=UI.Pos Bar.Size=Vector2.new(size.X,3) Bar.Color=CONFIG.BASE_COLOR
+    Title.Visible=true Title.Position=UI.Pos+Vector2.new(size.X/2,6) Title.Color=CONFIG.BASE_COLOR
+    Arrow.Visible=true Arrow.Text=s.MIN and "▶" or "▼"
     Arrow.Position=UI.Pos+Vector2.new(size.X-14,6)
 
-    for _,o in pairs(Btn) do o.Bg.Visible=false o.Txt.Visible=false end
-    if min then return end
+    if s.MIN then return end
 
     for i,b in ipairs(Buttons) do
         local o=Btn[b.key]
-        local y=35+(i-1)*40
-        local on=getgenv().ONESP_STATE[b.key]
+        local y=35+(i-1)*35
+
         o.Bg.Visible=true
-        o.Bg.Position=UI.Pos+Vector2.new(25,y)
-        o.Bg.Size=Vector2.new(160,30)
-        o.Bg.Color=on and CONFIG.BASE_COLOR or CONFIG.DIM_COLOR
+        o.Bg.Position=UI.Pos+Vector2.new(30,y)
+        o.Bg.Size=Vector2.new(160,28)
+
+        if b.key=="FORCE" then
+            o.Bg.Color=CONFIG.BASE_COLOR
+            o.Txt.Text="FORCE: "..CONFIG.AIM_STRENGTHS[s.AIM_POWER].name
+        elseif b.key=="BONE" then
+            o.Bg.Color=CONFIG.BASE_COLOR
+            o.Txt.Text="BONE: "..CONFIG.BONES[s.AIM_BONE].name
+        else
+            o.Bg.Color=s[b.key] and CONFIG.BASE_COLOR or CONFIG.DIM_COLOR
+            o.Txt.Text=b.label.." "..(s[b.key] and "ON" or "OFF")
+        end
+
         o.Txt.Visible=true
-        o.Txt.Text=b.name..(on and " ON" or " OFF")
-        o.Txt.Position=o.Bg.Position+Vector2.new(80,7)
+        o.Txt.Position=o.Bg.Position+Vector2.new(80,6)
     end
+
+    local sy=35+#Buttons*35+10
+    SliderBG.Visible=true
+    SliderBG.Position=UI.Pos+Vector2.new(30,sy)
+    SliderBG.Size=Vector2.new(160,18)
+    SliderBG.Color=CONFIG.DIM_COLOR
+
+    local pct=(s.FOV-CONFIG.FOV_MIN)/(CONFIG.FOV_MAX-CONFIG.FOV_MIN)
+    pct=math.clamp(pct,0,1)
+
+    SliderFill.Visible=true
+    SliderFill.Position=SliderBG.Position
+    SliderFill.Size=Vector2.new(160*pct,18)
+    SliderFill.Color=CONFIG.BASE_COLOR
+
+    SliderText.Visible=true
+    SliderText.Text="FOV: "..s.FOV
+    SliderText.Position=SliderBG.Position+Vector2.new(80,2)
 end
 
 --================ INPUT =================
-local mouseStart
 UIS.InputBegan:Connect(function(i,gp)
     if gp then return end
+    local s=getgenv().ONESP_STATE
 
-    if i.KeyCode == Enum.KeyCode.F4 then
-        getgenv().ONESP_STATE.ENABLED = not getgenv().ONESP_STATE.ENABLED
-        getgenv().ONESP_STATE.UI = getgenv().ONESP_STATE.ENABLED
-        PlayToggle()
+    if i.KeyCode==Enum.KeyCode.F4 then
+        s.ENABLED=not s.ENABLED
+        s.UI=s.ENABLED
+        Play()
         RefreshUI()
         return
     end
 
     if i.UserInputType==Enum.UserInputType.MouseButton1 then
         local p=UIS:GetMouseLocation()
-        mouseStart=p
-        if math.abs(p.X-Arrow.Position.X)<=10 and math.abs(p.Y-Arrow.Position.Y)<=10 then
-            getgenv().ONESP_STATE.MIN=not getgenv().ONESP_STATE.MIN
+
+        if (p-Arrow.Position).Magnitude<=12 then
+            s.MIN=not s.MIN
             RefreshUI()
             return
         end
+
+        for _,b in ipairs(Buttons) do
+            local o=Btn[b.key]
+            if o.Bg.Visible and p.X>=o.Bg.Position.X and p.X<=o.Bg.Position.X+o.Bg.Size.X
+            and p.Y>=o.Bg.Position.Y and p.Y<=o.Bg.Position.Y+o.Bg.Size.Y then
+
+                if b.key=="FORCE" then
+                    s.AIM_POWER=s.AIM_POWER%#CONFIG.AIM_STRENGTHS+1
+                elseif b.key=="BONE" then
+                    s.AIM_BONE=s.AIM_BONE%#CONFIG.BONES+1
+                else
+                    s[b.key]=not s[b.key]
+                end
+
+                Play()
+                RefreshUI()
+                return
+            end
+        end
+
+        if p.X>=SliderBG.Position.X and p.X<=SliderBG.Position.X+SliderBG.Size.X
+        and p.Y>=SliderBG.Position.Y and p.Y<=SliderBG.Position.Y+SliderBG.Size.Y then
+            draggingSlider=true
+            return
+        end
+
         if p.X>=UI.Pos.X and p.X<=UI.Pos.X+Frame.Size.X and p.Y>=UI.Pos.Y and p.Y<=UI.Pos.Y+28 then
             UI.Drag=true UI.Offset=p-UI.Pos
         end
@@ -134,132 +204,65 @@ UIS.InputBegan:Connect(function(i,gp)
 end)
 
 UIS.InputEnded:Connect(function(i)
-    if i.UserInputType~=Enum.UserInputType.MouseButton1 then return end
-    UI.Drag=false
-    local p=UIS:GetMouseLocation()
-    if (p-mouseStart).Magnitude>6 or getgenv().ONESP_STATE.MIN then return end
-    for _,b in ipairs(Buttons) do
-        local o=Btn[b.key]
-        if p.X>=o.Bg.Position.X and p.X<=o.Bg.Position.X+160
-        and p.Y>=o.Bg.Position.Y and p.Y<=o.Bg.Position.Y+30 then
-            getgenv().ONESP_STATE[b.key]=not getgenv().ONESP_STATE[b.key]
-            RefreshUI()
-            return
-        end
+    if i.UserInputType==Enum.UserInputType.MouseButton1 then
+        UI.Drag=false
+        draggingSlider=false
     end
 end)
 
 RunService.RenderStepped:Connect(function()
+    if draggingSlider then
+        local p=UIS:GetMouseLocation()
+        local x=math.clamp((p.X-SliderBG.Position.X)/SliderBG.Size.X,0,1)
+        getgenv().ONESP_STATE.FOV=math.floor(CONFIG.FOV_MIN+x*(CONFIG.FOV_MAX-CONFIG.FOV_MIN))
+        RefreshUI()
+    end
     if UI.Drag then UI.Pos=UIS:GetMouseLocation()-UI.Offset RefreshUI() end
 end)
 
---================ RAINBOW =================
-local function Color()
-    if not getgenv().ONESP_STATE.RAINBOW then return CONFIG.BASE_COLOR end
-    return Color3.fromHSV(tick()%5/5,1,1)
-end
-
 --================ FOV =================
-local FOV=D("Circle",{Radius=CONFIG.FOV_RADIUS,Thickness=2,Filled=false})
+local FOV=D("Circle",{Thickness=2,Filled=false})
 
---================ ESP =================
-local ESP={}
-local function Add(p)
-    if p==LP then return end
-    ESP[p]={
-        Box=D("Square",{Filled=false}),
-        Head=D("Square",{Filled=true,Size=Vector2.new(10,10)}),
-        Name=D("Text",{Center=true,Outline=true})
-    }
-end
-for _,p in ipairs(Players:GetPlayers()) do Add(p) end
-Players.PlayerAdded:Connect(Add)
-Players.PlayerRemoving:Connect(function(p)
-    if ESP[p] then for _,d in pairs(ESP[p]) do d:Remove() end ESP[p]=nil end
-end)
+--================ AIM LOOP =================
+local function GetTarget()
+    local s=getgenv().ONESP_STATE
+    local mouse=UIS:GetMouseLocation()
+    local best,dist=nil,s.FOV
 
---================ AIMBOT =================
-local hold=false
-UIS.InputBegan:Connect(function(i) if i.UserInputType==Enum.UserInputType.MouseButton2 then hold=true end end)
-UIS.InputEnded:Connect(function(i) if i.UserInputType==Enum.UserInputType.MouseButton2 then hold=false end end)
-
-local function Closest()
-    local best,dist=nil,CONFIG.FOV_RADIUS
-    for p,_ in pairs(ESP) do
-        local c=p.Character
-        local h=c and c:FindFirstChild("Head")
-        local hum=c and c:FindFirstChildOfClass("Humanoid")
-        if h and hum and hum.Health>0 then
-            local sp,on=Camera:WorldToViewportPoint(h.Position)
-            if on then
-                local d=(Vector2.new(sp.X,sp.Y)-UIS:GetMouseLocation()).Magnitude
-                if d<dist then dist=d best=h end
+    for _,plr in ipairs(Players:GetPlayers()) do
+        if plr~=LP and plr.Character then
+            local hum=plr.Character:FindFirstChild("Humanoid")
+            if hum and hum.Health>0 then
+                for _,part in ipairs(CONFIG.BONES[s.AIM_BONE].parts) do
+                    local p=plr.Character:FindFirstChild(part)
+                    if p then
+                        local v,ons=Camera:WorldToViewportPoint(p.Position)
+                        if ons then
+                            local d=(Vector2.new(v.X,v.Y)-mouse).Magnitude
+                            if d<dist then best=p dist=d end
+                        end
+                    end
+                end
             end
         end
     end
     return best
 end
 
---================ MAIN LOOP =================
 RunService.RenderStepped:Connect(function()
-    if not getgenv().ONESP_STATE.ENABLED then return end
+    local s=getgenv().ONESP_STATE
+    if not s.ENABLED then return end
 
-    local col=Color()
-    Bar.Color=col Title.Color=col FOV.Color=col
-
+    FOV.Visible=s.AIM
     FOV.Position=UIS:GetMouseLocation()
-    FOV.Visible=getgenv().ONESP_STATE.AIM
+    FOV.Radius=s.FOV
+    FOV.Color=s.RAINBOW and Color3.fromHSV(tick()%5/5,1,1) or CONFIG.BASE_COLOR
 
-    if getgenv().ONESP_STATE.AIM and hold then
-        local t=Closest()
+    if s.AIM and UIS:IsMouseButtonPressed(Enum.UserInputType.MouseButton2) then
+        local t=GetTarget()
         if t then
-            Camera.CFrame=Camera.CFrame:Lerp(
-                CFrame.new(Camera.CFrame.Position,t.Position),
-                0.30
-            )
-        end
-    end
-
-    local myRoot=LP.Character and LP.Character:FindFirstChild("HumanoidRootPart")
-    if not myRoot then return end
-
-    for p,e in pairs(ESP) do
-        local c=p.Character
-        local r=c and c:FindFirstChild("HumanoidRootPart")
-        local h=c and c:FindFirstChild("Head")
-        local hum=c and c:FindFirstChildOfClass("Humanoid")
-
-        if getgenv().ONESP_STATE.ESP and r and h and hum and hum.Health>0 then
-            local rs,on=Camera:WorldToViewportPoint(r.Position)
-            if not on then for _,d in pairs(e) do d.Visible=false end continue end
-
-            local dist=(myRoot.Position-r.Position).Magnitude
-            local size=math.clamp(
-                CONFIG.MIN_TEXT + (dist/CONFIG.SCALE_DIST)*(CONFIG.MAX_TEXT-CONFIG.MIN_TEXT),
-                CONFIG.MIN_TEXT, CONFIG.MAX_TEXT
-            )
-
-            local top=Camera:WorldToViewportPoint(r.Position+Vector3.new(0,3,0))
-            local bot=Camera:WorldToViewportPoint(r.Position-Vector3.new(0,3,0))
-            local hgt=math.abs(top.Y-bot.Y)
-            local w=hgt/2
-
-            e.Box.Size=Vector2.new(w,hgt)
-            e.Box.Position=Vector2.new(rs.X-w/2,rs.Y-hgt/2)
-            e.Box.Color=col
-
-            local hs=Camera:WorldToViewportPoint(h.Position)
-            e.Head.Position=Vector2.new(hs.X-5,hs.Y-5)
-            e.Head.Color=CONFIG.HEAD_COLOR
-
-            e.Name.Size=size
-            e.Name.Text=p.Name.." ["..math.floor(dist).."m]"
-            e.Name.Position=Vector2.new(rs.X,rs.Y-hgt/2-18)
-            e.Name.Color=col
-
-            for _,d in pairs(e) do d.Visible=true end
-        else
-            for _,d in pairs(e) do d.Visible=false end
+            local strength=CONFIG.AIM_STRENGTHS[s.AIM_POWER].value
+            Camera.CFrame=Camera.CFrame:Lerp(CFrame.new(Camera.CFrame.Position,t.Position),strength)
         end
     end
 end)
