@@ -219,7 +219,10 @@ local function AddESP(p)
     ESP[p]={
         Box=D("Square",{Filled=false,Thickness=1},true),
         Head=D("Square",{Filled=true,Size=Vector2.new(8,8)},true),
-        Name=D("Text",{Size=13,Center=true,Outline=true},true)
+        Name=D("Text",{Size=13,Center=true,Outline=true},true),
+
+        HP_BG=D("Square",{Filled=true,Transparency=0.6},true),
+        HP_BAR=D("Square",{Filled=true},true)
     }
 end
 
@@ -231,6 +234,7 @@ end)
 
 --================ AIM + ESP LOOP =================
 local FOV=D("Circle",{Thickness=2,Filled=false})
+local hue=0
 
 local function GetTarget()
     local mouse=UIS:GetMouseLocation()
@@ -257,10 +261,17 @@ end
 RunService.RenderStepped:Connect(function()
     if not STATE.ENABLED then return end
 
+    -- Rainbow
+    if STATE.RAINBOW then
+        hue=(hue+1)%360
+        FOV.Color=Color3.fromHSV(hue/360,1,1)
+    else
+        FOV.Color=CONFIG.COLORS.MAIN
+    end
+
     FOV.Visible=STATE.AIM
     FOV.Position=UIS:GetMouseLocation()
     FOV.Radius=STATE.FOV
-    FOV.Color=CONFIG.COLORS.MAIN
 
     if STATE.AIM and UIS:IsMouseButtonPressed(Enum.UserInputType.MouseButton2) then
         local t=GetTarget()
@@ -292,7 +303,7 @@ RunService.RenderStepped:Connect(function()
 
             e.Box.Size=Vector2.new(w,hgt)
             e.Box.Position=Vector2.new(rs.X-w/2,rs.Y-hgt/2)
-            e.Box.Color=CONFIG.COLORS.MAIN
+            e.Box.Color=STATE.RAINBOW and Color3.fromHSV(hue/360,1,1) or CONFIG.COLORS.MAIN
 
             local hs=Camera:WorldToViewportPoint(h.Position)
             e.Head.Position=Vector2.new(hs.X-4,hs.Y-4)
@@ -302,6 +313,17 @@ RunService.RenderStepped:Connect(function()
             e.Name.Text=p.Name.." ["..math.floor(dist).."m]"
             e.Name.Position=Vector2.new(rs.X,rs.Y-hgt/2-16)
             e.Name.Color=CONFIG.COLORS.TEXT
+
+            -- Health bar
+            local hp=math.clamp(hum.Health/hum.MaxHealth,0,1)
+            local barX=e.Box.Position.X-6
+            e.HP_BG.Position=Vector2.new(barX,e.Box.Position.Y)
+            e.HP_BG.Size=Vector2.new(4,hgt)
+            e.HP_BG.Color=Color3.fromRGB(20,20,20)
+
+            e.HP_BAR.Position=Vector2.new(barX,e.Box.Position.Y+hgt-(hgt*hp))
+            e.HP_BAR.Size=Vector2.new(4,hgt*hp)
+            e.HP_BAR.Color=Color3.fromRGB(255*(1-hp),255*hp,0)
 
             for _,d in pairs(e) do d.Visible=true end
         else
